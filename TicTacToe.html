@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=0">
+        <meta name="applicable-device" content="mobile">
+        <title>TicTacToe Demo</title>
+        <script>
+            (function (doc, win) {
+                var docEl = doc.documentElement,
+                    resizeEvt = 'orientationchange' in window ? 'orientationchange' : 'resize',
+                    recalc = function () {
+                        var clientWidth = docEl.clientWidth;
+                        if (!clientWidth) return;
+                        if (clientWidth >= 750) {
+                            docEl.style.fontSize = '100px';
+                        } else {
+                            docEl.style.fontSize = 100 * (clientWidth / 750) + 'px';
+                        }
+                    };
+
+                if (!doc.addEventListener) return;
+                win.addEventListener(resizeEvt, recalc, false);
+                doc.addEventListener('DOMContentLoaded', recalc, false);
+            })(document, window);
+        </script>
+        <script src="https://s0.ifengimg.com/static/js/jquery-1.7.2.min_c4de8813.js"></script>
+        <style>
+            *{
+                box-sizing: border-box;
+                font-family: PingFangSC-Regular;
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+            /* 棋盘样式 */
+            .chessboard{
+                width: 6rem;
+                height: 6rem;
+                margin: 1rem auto;
+                overflow: hidden;
+                background: #f98521;
+            }
+            .chessboard .grid{
+                float: left;
+                border: .02rem solid #f7c5a8b5;
+                width: 2rem;
+                height: 2rem;
+                line-height: 2rem;
+                text-align: center;
+                font-size: 1.3rem;
+            }
+
+            /* toastr样式 */
+            .toastrTip{
+                position: fixed;
+                top: 20%;
+                left: 50%;
+                transform: translate3d(-50%, 0, 0);
+                box-shadow: 0.08rem 0.08rem 0.16rem #7b6e40;;
+                z-index: 999;
+                display: inline-block;
+                padding: 0 .5rem;
+                line-height: 1rem;
+                font-size: .3rem;
+                color: #051f17;
+                background: white;
+                border-radius: .06rem;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="chessboard"></div>
+    </body>
+
+    <script>
+        $(document).ready(function(){
+            var myRender = new TicTacToe('.chessboard')
+            myRender.initChessboard()
+        })
+
+        /**
+         * TicTacToe
+         * @param seletor{string} 节点选择器
+         * @param data{number[][]} 棋盘矩阵
+         */
+        var TicTacToe = function(seletor, data){
+            // 棋盘矩阵
+            this.pattern = data || 
+            [
+                [0, 0, 0],
+                [0, 0, 0],
+                [0, 0, 0]
+            ]
+            // 选择器节点
+            this.seletor = seletor
+            // 持棋方，0：无；1：黑； 2：白
+            this.holdChess = 1
+            // 是否胜出
+            this.win = false
+            // 是否可继续
+            this.continue = true
+        }
+
+        /**
+         * 初始化棋盘
+         */
+        TicTacToe.prototype.initChessboard = function(){
+            var that = this
+            var dom = $('<div></div>');
+            this.pattern.forEach(function(arr, arrIdx) {
+                var template
+                arr.forEach(function(ele, eleIdx){
+                    template = $('<div class="grid">' +
+                            that.getChessman(that.pattern[arrIdx][eleIdx]) +
+                        '</div>')
+                    $(template).off('click').on('click', that.chessClick.bind(that, arrIdx, eleIdx))
+                    dom.append($(template))
+                })
+            });
+            $(this.seletor).html(dom)
+        }
+
+        /**
+         * 渲染棋子
+         * @params holdChess{number} 持棋方 
+         * @return {string} 落子
+         */
+        TicTacToe.prototype.getChessman = function(holdChess){
+            switch(holdChess){
+                case 0:
+                    return ''
+                case 1:
+                    return '⚫️'
+                case 2:
+                    return '⚪️'
+                default:
+                    return ''
+            }
+        }
+
+        /**
+         * 切换持棋方
+         */
+        TicTacToe.prototype.toggle = function(){
+            this.holdChess = 3 - this.holdChess
+        }
+
+        /**
+         * 棋盘点击事件
+         * @param row{number} 行
+         * @param column{number} 列
+         */
+        TicTacToe.prototype.chessClick = function(row, column, $evt){
+            if(this.pattern[row][column] || this.win || !this.continue)
+                return
+            // console.log($evt, row, column)
+            this.pattern[row][column] = this.holdChess
+            this.initChessboard()
+            if(this.check())
+                this.setWin(true)
+
+            if(this.win){
+                this.toastr((this.holdChess === 1 ? '⚫️' : '⚪️') + ' 赢啦!')
+                return
+            }
+
+            var will = this.willWin(this.holdChess)
+            will && this.toastr((this.holdChess === 1 ? '⚫️' : '⚪️')+' 要赢了！—— pos('+will.x+', '+will.y+')')
+                
+            this.toggle()
+        }
+
+        /**
+         * AI提示功能
+         * @params holdChess{number} 持棋方
+         * @return {object{x, y} || null} 胜出位置x坐标, 胜出位置y坐标 || 无法胜出
+         */
+        TicTacToe.prototype.willWin = function(holdChess){
+            var that = this
+            var res = null
+            this.pattern.forEach(function(arr, arrIdx){
+                arr.forEach(function(ele, eleIdx){
+                    if(!ele){
+                        var copyPattern = that.copy(that.pattern)
+                        copyPattern[arrIdx][eleIdx] = holdChess
+                        if(that.check(copyPattern)){
+                            res = {
+                                x: arrIdx,
+                                y: eleIdx
+                            }
+                        }
+                    }
+                })
+            })
+            return res
+        }
+
+        /**
+         * 拷贝
+         * @params tar{any} 拷贝目标
+         * @return {any}
+         */
+        TicTacToe.prototype.copy = function(tar){
+            return JSON.parse(JSON.stringify(tar))
+        }
+
+        /**
+         * 判断胜负
+         * @param pattern{number[][]} 棋盘矩阵
+         * @return {boolean} 是否胜出
+         */
+        TicTacToe.prototype.check = function(pattern){
+            !pattern ? pattern = this.pattern : null
+            var that = this
+            var win
+
+            // 行'——'
+            for(var i = 0; i<pattern.length; i++){
+                win = true
+                for(var j = 0; j<pattern[i].length; j++){
+                    if(pattern[i][j] !== this.holdChess){
+                        win = false
+                    }
+                }
+                if(win)
+                    return win
+            }
+
+            // 纵'|'
+            for(var i = 0; i<pattern.length; i++){
+                win = true
+                for(var j = 0; j<pattern[i].length; j++){
+                    if(pattern[j][i] !== this.holdChess){
+                        win = false
+                    }
+                }
+                if(win)
+                    return win
+            }
+
+            // 斜对角'\'
+            win = true
+            pattern.forEach(function(arr, arrIdx){
+                if(pattern[arrIdx][arrIdx] !== that.holdChess){
+                    win = false
+                }
+            })
+            if(win)
+                return win
+
+            // 斜对角'/'
+            win = true
+            pattern.forEach(function(arr, arrIdx){
+                if(pattern[arrIdx][2 - arrIdx] !== that.holdChess){
+                    win = false
+                }
+            })
+
+            return win
+        }
+
+        /**
+         * 设置输赢状态
+         * @param state{boolean}
+         */
+        TicTacToe.prototype.setWin = function(state){
+            this.win = state
+        }
+
+
+        /**
+         * Toastr提示
+         * param mess{string} 提示消息
+         * param delay{number} 提示时长
+         */ 
+         TicTacToe.prototype.toastr = function(mess, delay){
+            this.continue = false
+            var id=new Date().getTime().toString();
+            var html='<p class="toastrTip" id="'+id+'">' + mess+ '</p>';
+            $("body").append(html);
+            var that = this
+            var timer=setTimeout(function(){
+                $("#"+id).remove();
+                clearTimeout(timer);
+                that.continue = true
+            }, delay || 1500);
+        }
+    </script>
+</html>
